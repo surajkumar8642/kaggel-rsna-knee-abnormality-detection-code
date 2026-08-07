@@ -182,6 +182,7 @@ def submit_submission(submission: Path, competition: str, message: str) -> int:
                 "kaggle",
                 "competitions",
                 "submit",
+                "-c",
                 competition,
                 "-f",
                 str(submission),
