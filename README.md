@@ -10,14 +10,21 @@ The source-controlled notebook is:
 - `notebooks/rsna-knee-2-5d-baseline.ipynb`
 
 It was edited and executed in the Kaggle browser environment against the attached
-competition data. The verified full supervised run used:
+competition data. [Kaggle Version 2](https://www.kaggle.com/code/surajkumar8642/rsna-knee-2-5d-cnn-smoke-and-baseline/log?scriptVersionId=340866036)
+completed successfully in 87.7 seconds with:
 
-- Tesla T4 accelerator with PyTorch 2.10.0 + CUDA 12.8
+- no accelerator (CPU-safe profile with PyTorch 2.10.0)
 - all 58 studies containing official labels (49 train / 9 validation)
 - up to one series from each anatomical plane
 - orientation-aware DICOM ordering and center-slice triplets
-- 160 × 160 inputs, three epochs, and a compact GroupNorm CNN
+- 128 × 128 inputs, two epochs, and a compact GroupNorm CNN
+- validation macro AUC of 0.5833 across all 12 targets
+- zero test fallback studies
 - exact 12-target study-level submission validation
+
+The notebook detects when CUDA is visible but the installed PyTorch binary does
+not contain kernels for the assigned GPU. This prevents the P100/PyTorch 2.10
+failure seen in Version 1 and safely selects the CPU profile instead.
 
 The remaining 4,349 training metadata rows do not contain official target values,
 so they are excluded from supervised loss rather than assigned invented labels.
@@ -42,9 +49,12 @@ from the runtime `sample_submission.csv`.
 
 1. Create or open a Kaggle notebook for the competition.
 2. Attach **RSNA Knee Abnormality Detection** as the competition input.
-3. Turn internet off and select a GPU accelerator.
+3. Turn internet off. Leave the accelerator set to **None** for the verified
+   CPU-safe run; enable GPU only when Kaggle assigns an architecture supported by
+   the installed PyTorch build.
 4. Import `notebooks/rsna-knee-2-5d-baseline.ipynb`.
-5. Run all cells and require both `STAGE 2 PASSED` and `STAGE 3 PASSED`.
+5. Run all cells and require `STAGE 1 PASSED`, `STAGE 2 PASSED`,
+   `STAGE 3 PASSED`, and `DEVICE SELECTION REGRESSION PASSED`.
 6. Confirm `/kaggle/working/submission.csv` exists before saving a version.
 
 Saving a Kaggle version, publishing the notebook, and submitting to the competition
@@ -66,7 +76,8 @@ python scripts/sanitize_notebook.py `
 ```
 
 The sanitizer removes outputs, execution counts, transient Kaggle metadata, and
-empty cells, then validates the notebook structure.
+empty cells, then validates the notebook structure. It uses `nbformat` when
+available and has a standard-library JSON fallback for minimal Python installs.
 
 ## Important limitations
 

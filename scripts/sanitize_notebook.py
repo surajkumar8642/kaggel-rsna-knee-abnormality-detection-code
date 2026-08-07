@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
-import nbformat
+try:
+    import nbformat
+except ModuleNotFoundError:  # Keep the sanitizer usable in a minimal Python install.
+    nbformat = None
 
 
 TRANSIENT_NOTEBOOK_METADATA = {
@@ -24,14 +28,29 @@ TRANSIENT_CELL_METADATA = {
 
 
 def sanitize_notebook(source: Path, destination: Path) -> None:
-    notebook = nbformat.read(source, as_version=4)
-    cells = [cell for cell in notebook.cells if cell.source.strip()]
+    if nbformat is not None:
+        notebook = nbformat.read(source, as_version=4)
+        cells = [cell for cell in notebook.cells if cell.source.strip()]
+        get_source = lambda cell: cell.source
+        get_type = lambda cell: cell.cell_type
+        get_metadata = lambda cell: cell.metadata
+    else:
+        notebook = json.loads(source.read_text(encoding="utf-8"))
+        assert notebook.get("nbformat") == 4
+        cells = [
+            cell
+            for cell in notebook.get("cells", [])
+            if "".join(cell.get("source", [])).strip()
+        ]
+        get_source = lambda cell: "".join(cell.get("source", []))
+        get_type = lambda cell: cell.get("cell_type")
+        get_metadata = lambda cell: cell.setdefault("metadata", {})
 
     overview_cells = [
         cell
         for cell in cells
-        if cell.cell_type == "markdown"
-        and cell.source.lstrip().startswith("# RSNA Knee 2.5D CNN")
+        if get_type(cell) == "markdown"
+        and get_source(cell).lstrip().startswith("# RSNA Knee 2.5D CNN")
     ]
     if overview_cells:
         overview = overview_cells[0]
@@ -39,18 +58,31 @@ def sanitize_notebook(source: Path, destination: Path) -> None:
 
     for cell in cells:
         for key in TRANSIENT_CELL_METADATA:
-            cell.metadata.pop(key, None)
-        if cell.cell_type == "code":
-            cell.execution_count = None
-            cell.outputs = []
+            get_metadata(cell).pop(key, None)
+        if get_type(cell) == "code":
+            if nbformat is not None:
+                cell.execution_count = None
+                cell.outputs = []
+            else:
+                cell["execution_count"] = None
+                cell["outputs"] = []
 
     for key in TRANSIENT_NOTEBOOK_METADATA:
-        notebook.metadata.pop(key, None)
-    notebook.cells = cells
+        if nbformat is not None:
+            notebook.metadata.pop(key, None)
+        else:
+            notebook.setdefault("metadata", {}).pop(key, None)
 
-    nbformat.validate(notebook)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    nbformat.write(notebook, destination)
+    if nbformat is not None:
+        notebook.cells = cells
+        nbformat.validate(notebook)
+        nbformat.write(notebook, destination)
+    else:
+        notebook["cells"] = cells
+        serialized = json.dumps(notebook, ensure_ascii=False, indent=1) + "\n"
+        json.loads(serialized)
+        destination.write_text(serialized, encoding="utf-8")
 
 
 def main() -> None:
