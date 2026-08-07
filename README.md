@@ -67,3 +67,12 @@ $python = 'C:\\Users\\suraj2\\AppData\\Local\\Programs\\Python\\Python311\\pytho
 ```
 
 A valid `.dcm` should read without exceptions and expose tags like `SOPInstanceUID` and image fields (`Rows`, `Columns`, `PixelSpacing`).
+
+## Environment bootstrap
+
+`powershell
+.\scripts\bootstrap_env.ps1
+`
+
+This installs numpy/pandas/pydicom/matplotlib/kaggle and reports Kaggle auth status.
+
