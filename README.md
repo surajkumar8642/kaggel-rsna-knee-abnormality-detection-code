@@ -55,3 +55,15 @@ You can run the local smoke test now:
 
 - The repository does not include Kaggle `raw` data.
 - The default generator creates a zero baseline for all targets; replace with a real model output when ready.
+
+## Quick DICOM check
+
+The provided file is `.dcm` (DICOM), which is a standard medical imaging format.  
+To inspect it:
+
+```powershell
+$python = 'C:\\Users\\suraj2\\AppData\\Local\\Programs\\Python\\Python311\\python.exe'
+& $python -c "import pydicom; ds=pydicom.dcmread(r'D:\\Downloads\\<your_file>.dcm'); print(ds.Modality, ds.BodyPartExamined, ds.Rows, ds.Columns, ds.PatientID)"
+```
+
+A valid `.dcm` should read without exceptions and expose tags like `SOPInstanceUID` and image fields (`Rows`, `Columns`, `PixelSpacing`).
