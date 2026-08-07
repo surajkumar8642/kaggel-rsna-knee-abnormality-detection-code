@@ -10,6 +10,13 @@ env/
 # Jupyter
 .ipynb_checkpoints/
 
+# Kaggle CLI and runtime
+.kaggle/
+kaggle.json
+
 # OS files
 .DS_Store
 Thumbs.db
+
+# Outputs
+outputs/
