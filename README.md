@@ -1,71 +1,74 @@
-# RSNA Knee Abnormality Detection — 2.5D CNN
+# RSNA Knee Abnormality Detection — Report-Supervised DINOv2 MIL
 
 Human-readable Kaggle notebook and supporting utilities for the
 [RSNA Knee Abnormality Detection competition](https://www.kaggle.com/competitions/rsna-knee-abnormality-detection).
 
-## Tested notebook
+## Verified Kaggle baseline
 
-The source-controlled notebook is:
+The source-controlled notebook is
+`notebooks/rsna-knee-2-5d-baseline.ipynb`. It is a sanitized, code-only copy of
+the private Kaggle notebook: outputs, execution counts, transient metadata,
+patient data, predictions, checkpoints, and cached features are not tracked.
 
-- `notebooks/rsna-knee-2-5d-baseline.ipynb`
+[Kaggle Version 3](https://www.kaggle.com/code/surajkumar8642/rsna-knee-2-5d-cnn-smoke-and-baseline/log?scriptVersionId=340880172)
+completed successfully in 1 hour 32 minutes 29 seconds on T4 x2 with:
 
-It was edited and executed in the Kaggle browser environment against the attached
-competition data. [Kaggle Version 2](https://www.kaggle.com/code/surajkumar8642/rsna-knee-2-5d-cnn-smoke-and-baseline/log?scriptVersionId=340866036)
-completed successfully in 87.7 seconds with:
+- all 4,407 training studies encoded;
+- frozen DINOv2 ViT-S/14 multi-plane features;
+- confidence-weighted report supervision plus official labels;
+- leakage-safe five-fold target-attention MIL training;
+- exactly 58 out-of-fold predictions and all 12 targets scorable;
+- OOF macro AUC `0.6280`, compared with `0.5833` for the earlier CPU CNN;
+- zero train or test fallback studies;
+- an exact 3-row x 13-column visible-test submission;
+- independent schema, finiteness, probability-range, nonce, checkpoint, and
+  checksum validation.
 
-- no accelerator (CPU-safe profile with PyTorch 2.10.0)
-- all 58 studies containing official labels (49 train / 9 validation)
-- up to one series from each anatomical plane
-- orientation-aware DICOM ordering and center-slice triplets
-- 128 × 128 inputs, two epochs, and a compact GroupNorm CNN
-- validation macro AUC of 0.5833 across all 12 targets
-- zero test fallback studies
-- exact 12-target study-level submission validation
-
-The notebook detects when CUDA is visible but the installed PyTorch binary does
-not contain kernels for the assigned GPU. This prevents the P100/PyTorch 2.10
-failure seen in Version 1 and safely selects the CPU profile instead.
-
-The remaining 4,349 training metadata rows do not contain official target values,
-so they are excluded from supervised loss rather than assigned invented labels.
+Version 3 is the authoritative completed run. Version 4 is a quick-saved source
+and documentation snapshot and did not consume another full training run. The
+Kaggle draft session is stopped, the accelerator is set to **None**, and the
+competition submission has not been made.
 
 ## Notebook flow
 
-1. **Stage 1 — Contract check:** validates the explicit competition paths, package
-   environment, and exact 13-column submission schema without recursively scanning
-   the approximately 570 GB input tree.
-2. **Stage 2 — Model pipeline:** selects series, decodes and normalizes DICOMs,
-   trains the compact 2.5D model, performs study-level inference, and atomically
-   writes `/kaggle/working/submission.csv`.
-3. **Stage 3 — Independent verification:** reloads the submission and temporary
-   checkpoint and rechecks shape, order, numeric types, finiteness, and probability
-   bounds.
-
-The visible Kaggle test set contains three studies. In a saved competition run,
-Kaggle replaces it with the hidden test set; the notebook derives row IDs and order
-from the runtime `sample_submission.csv`.
+1. Validate the current-run environment, competition files, IDs, and exact
+   12-target schema without recursively scanning the image tree.
+2. Parse reports into high-precision positive, negative, or unknown soft labels
+   while printing only aggregate diagnostics.
+3. Deterministically select sagittal, coronal, and axial series, physically order
+   DICOM slices, normalize intensities, and sample central anatomy.
+4. Extract reusable 384-dimensional slice features with the attached offline
+   DINOv2 ViT-S/14 model.
+5. Train a weighted target-query attention MIL head on five leakage-safe folds.
+6. Require exactly one OOF prediction for each of the 58 officially labelled
+   studies and compute macro ROC AUC only from official labels.
+7. Rank-average fold predictions and independently validate the submission.
 
 ## Run on Kaggle
 
-1. Create or open a Kaggle notebook for the competition.
-2. Attach **RSNA Knee Abnormality Detection** as the competition input.
-3. Turn internet off. Leave the accelerator set to **None** for the verified
-   CPU-safe run; enable GPU only when Kaggle assigns an architecture supported by
-   the installed PyTorch build.
-4. Import `notebooks/rsna-knee-2-5d-baseline.ipynb`.
-5. Run all cells and require `STAGE 1 PASSED`, `STAGE 2 PASSED`,
-   `STAGE 3 PASSED`, and `DEVICE SELECTION REGRESSION PASSED`.
-6. Confirm `/kaggle/working/submission.csv` exists before saving a version.
+1. Import `notebooks/rsna-knee-2-5d-baseline.ipynb` into a private Kaggle
+   competition notebook.
+2. Attach the **RSNA Knee Abnormality Detection** competition input and the
+   Kaggle-hosted DINOv2 ViT-S/14 weights expected by the notebook.
+3. Keep internet off. Use a compatible T4 accelerator for smoke and full feature
+   extraction; leave the accelerator off when no run is active.
+4. Run contract mode, then a bounded smoke fold, before a full run.
+5. Accept a model change only when identical-fold leakage-safe OOF improves on
+   `0.6280` and all data, cache, inference, and submission contracts pass.
+6. Save the validated notebook version. Publishing code and submitting to the
+   competition remain separate explicit actions.
 
-Saving a Kaggle version, publishing the notebook, and submitting to the competition
-are deliberately separate actions. A competition submission can consume a daily
-submission slot and should be confirmed immediately before clicking Submit.
+The visible Kaggle test set has three studies. In a saved competition run Kaggle
+replaces it with the hidden test set, so the notebook derives identifiers, row
+order, and target order from the runtime `sample_submission.csv`.
 
-## Repository hygiene
+## Local validation
 
-The repository intentionally excludes competition CSVs, DICOMs, reports,
-identifiers, credentials, generated submissions, model checkpoints, and archives.
-Only synthetic sample rows are tracked under `data/`.
+Run the repository checks with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/test_pipeline.ps1
+```
 
 To prepare a downloaded Kaggle notebook for source control:
 
@@ -75,14 +78,13 @@ python scripts/sanitize_notebook.py `
   notebooks\rsna-knee-2-5d-baseline.ipynb
 ```
 
-The sanitizer removes outputs, execution counts, transient Kaggle metadata, and
-empty cells, then validates the notebook structure. It uses `nbformat` when
-available and has a standard-library JSON fallback for minimal Python installs.
+## Repository safety
 
-## Important limitations
+Do not commit competition CSVs, reports, DICOMs, patient or study identifiers,
+derived per-study labels, embeddings, model checkpoints, generated submissions,
+or credentials. Only code, documentation, synthetic examples, and aggregate
+metrics belong in this public repository.
 
-- This is a research competition baseline, not a clinical diagnostic system.
-- The public three-study test run does not measure hidden-test leaderboard quality.
-- No external pretrained weights or internet downloads are used.
-- Do not print, commit, upload, or redistribute patient/study identifiers, reports,
-  DICOM data, or generated submission contents.
+This is a research competition system, not a clinical diagnostic system. A high
+leaderboard rank is an objective, not a guarantee; decisions are gated by
+leakage-safe OOF evidence rather than repeated public-leaderboard probing.
