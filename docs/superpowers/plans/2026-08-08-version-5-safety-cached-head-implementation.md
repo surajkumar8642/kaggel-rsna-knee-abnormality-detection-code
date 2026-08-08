@@ -1,450 +1,141 @@
-# Version 5 Safety and Cached-Head Laboratory Implementation Plan
+# Version 5 Browser-Only Safety and Cached-Head Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (- [ ]) syntax for tracking.
+> **Execution rule:** All code authoring, functional tests, fixes, smoke runs, and experiments happen in the signed-in Kaggle browser notebook. Local storage is used only for plans, downloaded/sanitized notebook snapshots, aggregate evidence, and Git history.
 
-**Goal:** Repair hidden-test ordering and fold-local supervision, reproduce the Version 3 OOF result from its pinned feature cache, and evaluate one-factor cached-head improvements without another DICOM/DINO pass.
+**Goal:** Repair hidden-test ordering and fold-local supervision, reproduce Version 3 from its pinned feature cache, and evaluate sequential cached-head improvements without another DICOM/DINO pass.
 
-**Architecture:** Reusable, synthetic-testable modules live under src/rsna_v5. A deterministic builder inlines those modules into a private Kaggle notebook so local and browser code cannot silently diverge. The notebook attaches the exact Version 3 output, validates provenance, runs an immutable registry, writes only private aggregate experiment evidence, and never creates a competition submission.
-
-**Tech Stack:** Python 3.12, NumPy, pandas, scikit-learn, PyTorch, pytest, nbformat, Kaggle T4 only for promoted head runs, and signed-in Chrome for Kaggle execution.
+**Authoritative environment:** Private Kaggle notebook, Python 3.12, NumPy, pandas, scikit-learn, PyTorch, competition input, exact Version 3 output, Internet off, accelerator None unless a measured promoted run needs T4.
 
 ---
 
-## File map
-
-- Modify requirements-dev.txt: add pytest.
-- Create src/rsna_v5/contracts.py: immutable targets, cache, and experiment configs.
-- Create src/rsna_v5/ordering.py: sample-driven test ordering and prediction validation.
-- Create src/rsna_v5/supervision.py: pure fold-local supervision.
-- Create src/rsna_v5/folds.py: pinned deterministic folds and digest.
-- Create src/rsna_v5/cache.py: cache provenance and array checks.
-- Create src/rsna_v5/data.py: cached-bag dataset and loaders.
-- Create src/rsna_v5/models.py: V3, residual-statistics, and plane-aware MIL.
-- Create src/rsna_v5/metrics.py: exact OOF, AUC, and paired bootstrap.
-- Create src/rsna_v5/training.py: common trainer and seed averaging.
-- Create src/rsna_v5/runner.py: immutable registry execution.
-- Create scripts/build_v5_cached_notebook.py: deterministic notebook builder.
-- Create notebooks/rsna-knee-v5-cached-head-experiments.ipynb: generated notebook.
-- Create tests/rsna_v5/: focused synthetic tests.
-- Modify scripts/test_pipeline.ps1, README.md, and CODEX_STATUS.md.
-
-## Task 1: Test environment and immutable contracts
-
-**Files:**
-- Modify requirements-dev.txt
-- Create src/rsna_v5/__init__.py
-- Create src/rsna_v5/contracts.py
-- Create tests/rsna_v5/test_contracts.py
-
-- [ ] **Step 1: Add the test dependency**
-
-Append pytest>=8.3 to requirements-dev.txt, create .venv, and install requirements-dev.txt.
-
-- [ ] **Step 2: Write failing contract tests**
-
-~~~python
-from dataclasses import FrozenInstanceError
-import pytest
-from src.rsna_v5.contracts import EXPERIMENTS, TARGETS, CacheContract, get_experiment
-
-def test_exact_targets():
-    assert TARGETS == (
-        "ACL", "MCL", "Medial Meniscus", "Lateral Meniscus",
-        "Medial OA", "Lateral OA", "PF OA", "Effusion",
-        "Synovitis", "Baker's", "Contusion", "Fracture",
-    )
-
-def test_contract_is_frozen():
-    contract = CacheContract(path="train_full_8.npz", sha256="a" * 64)
-    with pytest.raises(FrozenInstanceError):
-        contract.train_rows = 1
-
-def test_ad_hoc_experiment_is_rejected():
-    assert "v3_repro" in EXPERIMENTS
-    with pytest.raises(KeyError, match="unregistered experiment"):
-        get_experiment("ad_hoc")
-~~~
-
-- [ ] **Step 3: Run RED**
-
-~~~powershell
-.\.venv\Scripts\python.exe -m pytest tests/rsna_v5/test_contracts.py -q
-~~~
-
-Expected: import failure because src.rsna_v5.contracts does not exist.
-
-- [ ] **Step 4: Implement minimal contracts**
-
-Define frozen CacheContract and ExperimentConfig, exact TARGETS, SOURCE_SCRIPT_VERSION=340880172, expected cache dimensions (4407,24,384), and H0-H9 from the design. get_experiment must accept only registered names.
-
-- [ ] **Step 5: Run GREEN and commit**
-
-~~~powershell
-.\.venv\Scripts\python.exe -m pytest tests/rsna_v5/test_contracts.py -q
-git add requirements-dev.txt src/rsna_v5 tests/rsna_v5/test_contracts.py
-git commit -m "test: define Version 5 experiment contracts"
-~~~
-
-Expected: 3 passed.
-
-## Task 2: Sample-driven test ordering
-
-**Files:**
-- Create src/rsna_v5/ordering.py
-- Create tests/rsna_v5/test_ordering.py
-
-- [ ] **Step 1: Write failing tests**
-
-~~~python
-import numpy as np
-import pandas as pd
-import pytest
-from src.rsna_v5.ordering import align_test_to_sample, validate_predictions
-
-def test_rows_follow_sample_order():
-    sample = pd.DataFrame({"id": ["s2", "s1"], "A": [0.0, 0.0]})
-    test = pd.DataFrame({"id": ["s1", "s2"], "value": [1, 2]})
-    aligned = align_test_to_sample(test, sample, "id")
-    assert aligned["id"].tolist() == ["s2", "s1"]
-    assert aligned["value"].tolist() == [2, 1]
-
-@pytest.mark.parametrize("bad", [["s1", "s1"], ["s1", "s3"]])
-def test_duplicate_or_mismatched_ids_fail(bad):
-    sample = pd.DataFrame({"id": ["s1", "s2"], "A": [0.0, 0.0]})
-    with pytest.raises(ValueError):
-        align_test_to_sample(pd.DataFrame({"id": bad}), sample, "id")
-
-def test_prediction_validation_rejects_nan():
-    sample = pd.DataFrame({"id": ["s2", "s1"], "A": [0.0, 0.0]})
-    pred = pd.DataFrame({"id": ["s2", "s1"], "A": [np.nan, 0.8]})
-    with pytest.raises(ValueError, match="finite"):
-        validate_predictions(pred, sample, "id", ("A",))
-~~~
-
-- [ ] **Step 2: Run RED**
-
-~~~powershell
-.\.venv\Scripts\python.exe -m pytest tests/rsna_v5/test_ordering.py -q
-~~~
-
-- [ ] **Step 3: Implement exact ordering**
-
-align_test_to_sample checks non-null uniqueness and set equality, then performs sample[[id]].merge(test, how="left", validate="one_to_one", sort=False). validate_predictions checks exact columns, row count, ID order/uniqueness, numeric dtype, finiteness, and [0,1] without printing rows.
-
-- [ ] **Step 4: Run GREEN and commit**
-
-~~~powershell
-.\.venv\Scripts\python.exe -m pytest tests/rsna_v5/test_ordering.py -q
-git add src/rsna_v5/ordering.py tests/rsna_v5/test_ordering.py
-git commit -m "fix: enforce sample-driven test ordering"
-~~~
-
-## Task 3: Fold-local supervision and held-out immutability
-
-**Files:**
-- Create src/rsna_v5/supervision.py
-- Create tests/rsna_v5/test_supervision.py
-
-- [ ] **Step 1: Write failing supervision tests**
-
-Build a six-row/two-target fixture. Assert disabled non-gold weights are zero and values NaN, training-gold official labels override weak values with the configured multiplier, and held-out rows have zero weight. Add a mutation test that changes every held-out parser and official value, rebuilds, and requires exact equality of enabled mask, training indices, target/weight arrays, sampler weights, and positive weights.
-
-- [ ] **Step 2: Run RED**
-
-~~~powershell
-.\.venv\Scripts\python.exe -m pytest tests/rsna_v5/test_supervision.py -q
-~~~
-
-- [ ] **Step 3: Implement the pure API**
-
-Implement build_fold_supervision with positional NumPy-array parameters named
-weak_values, weak_weights, official_values, training_gold_positions,
-heldout_positions, enabled_targets, and gold_multiplier, returning a frozen
-SupervisionBundle. It copies inputs, gates only non-gold weak cells, applies exact
-official overrides to training-gold known cells, zeros held-out weights, derives
-usable rows from positive supervision mass, and computes bounded positive weights
-only from training rows.
-
-- [ ] **Step 4: Run GREEN and commit**
-
-~~~powershell
-.\.venv\Scripts\python.exe -m pytest tests/rsna_v5/test_supervision.py -q
-git add src/rsna_v5/supervision.py tests/rsna_v5/test_supervision.py
-git commit -m "fix: build leakage-safe fold supervision"
-~~~
-
-## Task 4: Pinned folds and exact OOF metrics
-
-**Files:**
-- Create src/rsna_v5/folds.py
-- Create src/rsna_v5/metrics.py
-- Create tests/rsna_v5/test_folds_metrics.py
-
-- [ ] **Step 1: Write failing fold tests**
-
-Use synthetic multi-label gold rows. Two calls must return identical assignments and SHA-256; no fold may overlap; all validation assignment counts must equal one.
-
-- [ ] **Step 2: Write failing OOF tests**
-
-OOFAccumulator(58,12) must reject duplicate writes, missing rows, wrong shape, and non-finite predictions. Three seed arrays must be averaged inside a fold before one assignment is recorded.
-
-- [ ] **Step 3: Run RED**
-
-~~~powershell
-.\.venv\Scripts\python.exe -m pytest tests/rsna_v5/test_folds_metrics.py -q
-~~~
-
-- [ ] **Step 4: Implement fixed Version 3-compatible folds**
-
-Port the deterministic greedy multi-label study split and expose build_gold_folds(labels, ids, seed=20260808). Hash assignment bytes and seed. Never switch algorithm based on optional packages.
-
-- [ ] **Step 5: Implement metrics**
-
-OOFAccumulator stores float64 NaNs plus integer counts. finalize requires all counts one. auc_report returns per-target, scorable count, and macro. paired_bootstrap_probability performs 2,000 fixed-seed study resamples and reports probability plus valid count.
-
-- [ ] **Step 6: Run GREEN and commit**
-
-~~~powershell
-.\.venv\Scripts\python.exe -m pytest tests/rsna_v5/test_folds_metrics.py -q
-git add src/rsna_v5/folds.py src/rsna_v5/metrics.py tests/rsna_v5/test_folds_metrics.py
-git commit -m "feat: pin folds and OOF metrics"
-~~~
-
-## Task 5: Exact feature-cache provenance
-
-**Files:**
-- Create src/rsna_v5/cache.py
-- Create tests/rsna_v5/test_cache.py
-
-- [ ] **Step 1: Write failing cache tests**
-
-Create tiny temporary NPZ files. Cover valid load, wrong SHA, dtype/shape mismatch, non-finite features, invalid active plane, nonzero padding, empty bag, fallback count, and zero/two filename matches.
-
-- [ ] **Step 2: Run RED**
-
-~~~powershell
-.\.venv\Scripts\python.exe -m pytest tests/rsna_v5/test_cache.py -q
-~~~
-
-- [ ] **Step 3: Implement exact resolution and loading**
-
-resolve_exact_cache requires exactly one explicit filename below the attached Version 3 root. load_cache hashes before np.load(allow_pickle=False), validates the eight known arrays, disables write flags, and returns FeaturePayload. It rejects cache discovery by newest-time or first-match behavior.
-
-- [ ] **Step 4: Run GREEN and commit**
-
-~~~powershell
-.\.venv\Scripts\python.exe -m pytest tests/rsna_v5/test_cache.py -q
-git add src/rsna_v5/cache.py tests/rsna_v5/test_cache.py
-git commit -m "feat: validate pinned DINO cache"
-~~~
-
-## Task 6: Cached data and three bounded MIL heads
-
-**Files:**
-- Create src/rsna_v5/data.py
-- Create src/rsna_v5/models.py
-- Create tests/rsna_v5/test_data_models.py
-
-- [ ] **Step 1: Write failing tests**
-
-Test batch shapes, deterministic loaders, output [B,12], finite gradients, missing planes, invalid plane rejection, padded-feature mutation invariance, and a 16-example synthetic overfit whose BCE falls by at least 50%.
-
-- [ ] **Step 2: Run RED**
-
-~~~powershell
-.\.venv\Scripts\python.exe -m pytest tests/rsna_v5/test_data_models.py -q
-~~~
-
-- [ ] **Step 3: Implement dataset**
-
-Items contain features, planes, mask, targets, and weights only. Convert float16 features to float32 per item. Replace inactive plane -1 with 0 only after preserving its mask.
-
-- [ ] **Step 4: Implement models**
-
-TargetAttentionMILV3 preserves Version 3 behavior. ResidualStatisticsMIL combines target attention with masked global mean/max. HierarchicalPlaneMIL attends per plane, masks absent planes, learns target-plane gates, and adds a global mean residual. All expose forward(features, planes, mask).
-
-- [ ] **Step 5: Run GREEN and commit**
-
-~~~powershell
-.\.venv\Scripts\python.exe -m pytest tests/rsna_v5/test_data_models.py -q
-git add src/rsna_v5/data.py src/rsna_v5/models.py tests/rsna_v5/test_data_models.py
-git commit -m "feat: add cached MIL heads"
-~~~
-
-## Task 7: Common trainer and immutable runner
-
-**Files:**
-- Create src/rsna_v5/training.py
-- Create src/rsna_v5/runner.py
-- Create tests/rsna_v5/test_training_runner.py
-
-- [ ] **Step 1: Write failing tests**
-
-Cover deterministic repeats, held-out exclusion, finite loss/gradient, checkpoint hash match, fixed seed list, seed averaging before OOF write, and rejection of runtime registry overrides.
-
-- [ ] **Step 2: Run RED**
-
-~~~powershell
-.\.venv\Scripts\python.exe -m pytest tests/rsna_v5/test_training_runner.py -q
-~~~
-
-- [ ] **Step 3: Implement Version 3 training**
-
-Use AdamW, LR 3e-4, weight decay 1e-3, batch 32, 20 epochs, patience 4, gradient clip 1.0, and seed 20260808 + 1000*seed_index + fold_index. Preserve the Version 3 macro-AUC/validation-loss selection rule.
-
-- [ ] **Step 4: Implement runner**
-
-For each fold, build supervision, train all registered seeds, average held-out seed predictions, write once to OOF, then return aggregate config/fold/cache hashes, per-target/macro AUC, seed variability, paired bootstrap, and runtime. Never write a submission CSV.
-
-- [ ] **Step 5: Run GREEN and commit**
-
-~~~powershell
-.\.venv\Scripts\python.exe -m pytest tests/rsna_v5/test_training_runner.py -q
-git add src/rsna_v5/training.py src/rsna_v5/runner.py tests/rsna_v5/test_training_runner.py
-git commit -m "feat: run immutable cached experiments"
-~~~
-
-## Task 8: Deterministic private Kaggle notebook
-
-**Files:**
-- Create scripts/build_v5_cached_notebook.py
-- Create tests/rsna_v5/test_notebook_builder.py
-- Create notebooks/rsna-knee-v5-cached-head-experiments.ipynb
-
-- [ ] **Step 1: Write failing builder tests**
-
-Require one overview cell, ordered module cells, zero outputs, null execution counts, no credentials/UID literals, AST-valid code, and byte-identical rebuilds.
-
-- [ ] **Step 2: Run RED**
-
-~~~powershell
-.\.venv\Scripts\python.exe -m pytest tests/rsna_v5/test_notebook_builder.py -q
-~~~
-
-- [ ] **Step 3: Implement builder**
-
-Use nbformat, embed exact UTF-8 module sources in dependency order, then append Kaggle configuration and runner cells. RUN_STAGE defaults to "contract" and accepts only contract, repro, screen, confirm.
-
-- [ ] **Step 4: Build, run GREEN, and commit**
-
-~~~powershell
-.\.venv\Scripts\python.exe scripts/build_v5_cached_notebook.py
-.\.venv\Scripts\python.exe -m pytest tests/rsna_v5/test_notebook_builder.py -q
-git add scripts/build_v5_cached_notebook.py tests/rsna_v5/test_notebook_builder.py notebooks/rsna-knee-v5-cached-head-experiments.ipynb
-git commit -m "feat: build Version 5 head laboratory"
-~~~
-
-## Task 9: Full local verification and documentation
-
-**Files:**
-- Modify scripts/test_pipeline.ps1
-- Modify README.md
-- Modify CODEX_STATUS.md
-
-- [ ] **Step 1: Extend the test entrypoint**
-
-After existing synthetic submission validation, invoke the selected Python with -m pytest tests/rsna_v5 -q and preserve immediate nonzero exit behavior.
-
-- [ ] **Step 2: Document boundaries and gates**
-
-Document the pinned Version 3 dependency, experiment names, no-submission boundary, local command, and promotion thresholds.
-
-- [ ] **Step 3: Run fresh verification**
-
-~~~powershell
-powershell -ExecutionPolicy Bypass -File scripts/test_pipeline.ps1
-.\.venv\Scripts\python.exe scripts/build_v5_cached_notebook.py
-git diff --exit-code -- notebooks/rsna-knee-v5-cached-head-experiments.ipynb
-git diff --check
-git status -sb
-~~~
-
-Expected: existing synthetic submission valid, all tests pass, notebook build idempotent, and diff check clean.
-
-- [ ] **Step 4: Commit and push**
-
-~~~powershell
-git add scripts/test_pipeline.ps1 README.md CODEX_STATUS.md
-git commit -m "docs: verify Version 5 cached workflow"
-git push
-~~~
-
-## Task 10: Kaggle cache contract and reproduction
-
-**Files:**
-- Modify source only through TDD and deterministic rebuilds.
-- Update CODEX_STATUS.md.
-
-- [ ] **Step 1: Create a new private Kaggle notebook**
-
-Import the generated notebook, attach competition data and exact Version 3 output, keep internet off, accelerator None.
-
-- [ ] **Step 2: Run contract stage**
-
-Record aggregate filename, size, SHA-256, shapes, dtypes, fallback count, fold digest, and source version. Pin the observed SHA through a failing local test, then rebuild.
-
-- [ ] **Step 3: Require the contract marker**
-
-~~~text
-V5 CONTRACT PASSED: cache=4407x24x384, folds=5, gold=58, targets=12
-~~~
-
-Any mismatch blocks reproduction.
-
-- [ ] **Step 4: Run H0**
-
-Run repro on CPU first; enable T4 only if measured head runtime warrants it. Require 58 OOF rows, 12 scorable targets, matching hashes, and macro AUC from 0.6230 through 0.6330.
-
-- [ ] **Step 5: Diagnose before continuing**
-
-If H0 fails, compare fold digest, raw supervision, cache SHA, model hyperparameters, and seeds. Do not run H1 until H0 passes.
-
-## Task 11: One-factor screens and confirmation
-
-**Files:**
-- Update CODEX_STATUS.md.
-- Modify code only through test-first local changes.
-
-- [ ] **Step 1: Run registry order**
-
-Run H1 then H2. Run H3 only under its registered condition. Freeze one supervision recipe before H4-H9. Never stack a failed candidate.
-
-- [ ] **Step 2: Apply screen gate**
-
-Require delta at least 0.005, bootstrap probability at least 0.75 with 1,500 valid resamples, at least 7/12 targets non-worse within 0.01, and no screen target drop above 0.10.
-
-- [ ] **Step 3: Confirm promoted candidate**
-
-Require macro at least 0.6450, mean single-seed at least 0.6380, seed standard deviation at most 0.015, at least 7/12 target improvements, and no more than two drops over 0.03.
-
-- [ ] **Step 4: Save and stop**
-
-Save only private aggregate manifests/checkpoints, stop the session, set accelerator None, and do not create, publish, or submit submission.csv.
-
-## Task 12: Independent review and phase handoff
-
-**Files:**
-- Modify CODEX_STATUS.md and README.md.
-- Update draft PR description if evidence materially changes.
-
-- [ ] **Step 1: Run two independent reviews**
-
-Reviewer one checks spec, leakage, ordering, hashes, OOF, and tests. Reviewer two checks comparison fairness, target deltas, bootstrap, runtime, and promotion.
-
-- [ ] **Step 2: Verify locally again**
-
-Run the complete suite, inspect Git diff, verify local and remote SHA, and verify Kaggle session stopped with accelerator None.
-
-- [ ] **Step 3: Freeze one decision**
-
-If no candidate passes, retain Version 3 and record rejection reasons. If one passes, name exactly one cached-head champion and freeze its config hash.
-
-- [ ] **Step 4: Commit and push handoff**
-
-~~~powershell
-git add CODEX_STATUS.md README.md
-git commit -m "docs: record Version 5 cached-head results"
-git push
-~~~
-
-Write the report-supervision implementation plan only after this evidence-backed handoff.
+## Task 1: Create an isolated private Version 5 notebook
+
+- [ ] In Chrome, create or copy a private notebook named RSNA Knee V5 Cached Head Lab.
+- [ ] Attach the RSNA competition input and exact Version 3 output (scriptVersionId 340880172).
+- [ ] Keep Internet off and accelerator None.
+- [ ] Add a Markdown overview stating that this notebook is OOF-only and must not create submission.csv.
+- [ ] Add RUN_STAGE with allowed values contract, repro, screen, confirm and default contract.
+- [ ] Print only aggregate counts, shapes, hashes, metrics, and runtimes.
+- [ ] Save a quick source version only after the initial contract cells parse.
+
+## Task 2: Browser TDD for immutable run contracts
+
+- [ ] Add a contract-test cell before the implementation cell.
+- [ ] Run it and require the expected NameError for the not-yet-defined contract objects.
+- [ ] Implement the exact 12-target tuple, source version 340880172, expected cache dimensions (4407,24,384), fold seed 20260808, and registered H0-H9 experiment configs.
+- [ ] Rerun the test cell and require every assertion to pass.
+- [ ] Reject unknown experiment names and mutable ad hoc overrides.
+- [ ] Record the aggregate marker V5 CONTRACT OBJECTS PASSED.
+
+## Task 3: Browser TDD for sample-driven hidden-test ordering
+
+- [ ] Add synthetic in-memory sample/test frames whose ID orders differ.
+- [ ] Call align_test_to_sample before defining it and require NameError.
+- [ ] Implement non-null uniqueness checks, exact ID-set equality, one-to-one left merge from sample IDs, and final NumPy order equality.
+- [ ] Implement validate_predictions for exact columns, row count, ID order, uniqueness, numeric types, finiteness, and [0,1].
+- [ ] Prove duplicate IDs, missing IDs, extra IDs, reversed output order, NaN, infinity, and out-of-range values fail.
+- [ ] Apply the function to runtime test.csv and sample_submission.csv before any feature extraction.
+- [ ] Assert exact ID equality again immediately before any future atomic write.
+- [ ] Do not print IDs or prediction rows.
+
+## Task 4: Browser TDD for fold-local supervision
+
+- [ ] Add a six-row/two-target synthetic fixture.
+- [ ] Call build_fold_supervision before defining it and require NameError.
+- [ ] Implement a fresh supervision bundle per fold using copies of parser arrays.
+- [ ] Gate weak labels only on non-gold rows.
+- [ ] Set disabled weak values to unknown and weights to zero.
+- [ ] Override non-held-out official cells with exact 0/1 and the configured trusted-gold weight.
+- [ ] Zero all held-out weights defensively and exclude held-out rows from the loader.
+- [ ] Compute sampler weights and positive weights from fold-training rows only.
+- [ ] Mutate every held-out parser and official value, rebuild, and require byte-identical enabled masks, training indices, values, weights, sampler weights, and positive weights.
+- [ ] Require raw weak arrays to remain unchanged.
+- [ ] Record the aggregate marker FOLD SUPERVISION REGRESSION PASSED.
+
+## Task 5: Pin and validate the Version 3 cache
+
+- [ ] Search only under the explicitly attached Version 3 input root for train_full_8.npz.
+- [ ] Require exactly one match; zero or multiple matches abort.
+- [ ] Compute and print only file size and SHA-256.
+- [ ] Load with allow_pickle=False.
+- [ ] Require features float16 (4407,24,384), planes int8 (4407,24), masks bool (4407,24).
+- [ ] Require finite features, active planes in 0..2, inactive planes -1, inactive features zero, every bag nonempty, and fallback_studies zero.
+- [ ] Hash the current train.csv ID order without printing it and record the legacy row-order provenance limitation.
+- [ ] Add a negative synthetic cache test for wrong dtype, wrong shape, NaN, invalid plane, nonzero padding, empty bag, and nonzero fallback.
+- [ ] Record the aggregate marker V5 CACHE CONTRACT PASSED.
+
+## Task 6: Reproduce exact folds and OOF accounting
+
+- [ ] Add synthetic tests before the fold implementation and require NameError.
+- [ ] Implement only the deterministic greedy multi-label split used by Version 3; do not conditionally change algorithms.
+- [ ] Require 58 official-label studies, fold sizes 12/12/12/11/11, no overlap, one validation assignment per study, and a stable assignment SHA-256.
+- [ ] Implement an OOF accumulator of shape (58,12) with NaN initialization and integer assignment counts.
+- [ ] Reject duplicate writes, missing rows, wrong shapes, and non-finite predictions.
+- [ ] Average all predeclared seeds inside each fold before one OOF write.
+- [ ] Recompute per-target and macro AUC from official labels and require stored/displayed equality within 1e-12.
+- [ ] Implement a fixed-seed 2,000-resample paired study bootstrap.
+- [ ] Record the aggregate marker V5 FOLD AND OOF CONTRACT PASSED.
+
+## Task 7: Reproduce the Version 3 MIL head
+
+- [ ] Add CPU synthetic tests before the model implementation and require NameError.
+- [ ] Implement the Version 3 target-attention MIL behavior exactly.
+- [ ] Require output shape [batch,12], finite logits and gradients, missing-plane support, invalid-plane rejection, padding mutation invariance, and deterministic tiny-batch loss reduction.
+- [ ] Implement the same weighted masked BCE, AdamW settings, LR 3e-4, weight decay 1e-3, batch 32, 20 epochs, patience 4, gradient clip 1.0, and seed formula.
+- [ ] Run only CPU synthetic tests first.
+- [ ] Record the aggregate marker V5 MODEL CONTRACT PASSED.
+
+## Task 8: H0 reproduction gate
+
+- [ ] Run H0 with the exact cache, folds, raw Version 3 supervision, head, and seeds.
+- [ ] Start on CPU; enable T4 only if measured projection materially benefits.
+- [ ] Require exactly 58 OOF rows, 12 scorable targets, finite predictions, matching cache/fold/config hashes, and macro AUC in [0.6230,0.6330].
+- [ ] If H0 fails, stop experiments and compare cache SHA, fold digest, raw supervision, model hyperparameters, and seed behavior one at a time.
+- [ ] Do not run H1 until H0 passes.
+- [ ] Stop T4 immediately if used.
+
+## Task 9: Sequential one-factor cached experiments
+
+Run every experiment against the current champion. Never stack a failed variant.
+
+- [ ] H1: correct fold-local gating only.
+- [ ] H2: trusted-gold multiplier 2.0 only.
+- [ ] H3: multiplier 3.0 only if H2 is promising but inconclusive.
+- [ ] H4: three fixed seeds averaged without seed selection.
+- [ ] H5: full/even/odd bag-mask inference with fixed 0.50/0.25/0.25 blend.
+- [ ] H6: fixed predeclared EMA.
+- [ ] H7: residual-statistics MIL using attention plus masked mean/max.
+- [ ] H8: hierarchical plane-aware MIL.
+- [ ] H9: a second deterministic CV repetition only for a promoted candidate.
+
+For each candidate require correctness gates, macro delta at least 0.005, paired-bootstrap probability at least 0.75 with at least 1,500 valid samples, at least 7/12 targets non-worse within 0.01, and no early-screen target drop above 0.10.
+
+## Task 10: Champion confirmation
+
+- [ ] Confirm only candidates that pass their single-factor screen.
+- [ ] Require rank-averaged OOF macro at least 0.6450.
+- [ ] Require mean single-seed macro at least 0.6380 and seed standard deviation at most 0.015.
+- [ ] Require at least 7/12 target improvements and no more than two target drops above 0.03.
+- [ ] Freeze exactly one champion config hash, or retain Version 3 if none passes.
+- [ ] Save only private aggregate manifests and private checkpoints.
+- [ ] Do not create submission.csv.
+
+## Task 11: Independent browser-run review
+
+- [ ] A safety reviewer checks notebook cells, executed outputs, ordering, held-out immutability, hashes, OOF counts, and privacy.
+- [ ] A model reviewer checks identical comparisons, target deltas, bootstrap validity, promotion logic, and runtime.
+- [ ] Fix any issue in the Kaggle browser, rerun the failing regression there, then rerun affected downstream cells.
+- [ ] Save a private Kaggle version only after both reviews approve.
+- [ ] Stop the session and set accelerator None.
+
+## Task 12: Local storage and Git handoff
+
+- [ ] Download the exact reviewed Kaggle notebook.
+- [ ] Sanitize outputs, execution counts, transient metadata, and empty cells for storage.
+- [ ] Store the sanitized notebook, this plan, and aggregate evidence only.
+- [ ] Never store reports, IDs, DICOMs, labels, features, checkpoints, credentials, or submission files locally.
+- [ ] Review Git diff for privacy and unintended files.
+- [ ] Commit and push the code-only snapshot to the existing draft PR.
+- [ ] Record Kaggle version, runtime, aggregate metrics, accelerator-off state, and next phase in CODEX_STATUS.md.
+
+The report-supervision implementation plan is written only after the cached-head champion is frozen. The imaging plan is written only after the report-supervision champion is frozen.

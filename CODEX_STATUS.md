@@ -6,7 +6,8 @@ Last updated: 2026-08-08 Asia/Calcutta
 
 | Session | Status | Work lane | Claimed paths | Browser ownership | Next action |
 |---|---|---|---|---|---|
-| model-code-agent | active | Write and review the approved Version 5 improvement specification | `docs/superpowers/specs/2026-08-08-version-5-score-improvement-design.md`, `CODEX_STATUS.md` | No active Kaggle compute; accelerator remains None | Commit the specification, complete written-spec review, then create the implementation plan |
+| model-code-agent | active | Execute Version 5 coding and tests only in the private Kaggle browser | `docs/superpowers/`, `notebooks/`, `CODEX_STATUS.md` for storage only | Next action is a new private V5 head-lab tab; accelerator None until measured need | Build browser contract cells one at a time, run RED/GREEN there, and stop accelerators immediately after use |
+| v5-task1-contracts | active | Define Version 5 immutable experiment contracts via TDD | `requirements-dev.txt`, `src/rsna_v5/__init__.py`, `src/rsna_v5/contracts.py`, `tests/rsna_v5/test_contracts.py`, `CODEX_STATUS.md` | None | Add failing contract tests, then implement and verify |
 
 ## Current verified evidence
 
@@ -31,3 +32,7 @@ Last updated: 2026-08-08 Asia/Calcutta
 `2026-08-08 | model-code-agent | handoff | Committed verified baseline at 66c580c, pushed feature/rsna-2-5d-baseline, and opened draft PR #1 | Pipeline, notebook schema, syntax, sanitizer idempotence, privacy scan, and diff checks passed; independent audit found test-order and weak-label-gating blockers | Keep PR draft; fix blockers with regression tests before any competition submission`
 
 `2026-08-08 | model-code-agent | active | User approved the staged Version 5 direction; claimed the Version 5 design spec | Three read-only reviewers are checking safety gates, experiment order, and cache-runner boundaries | Write, self-review, commit, and present the specification before implementation planning`
+
+`2026-08-08 | v5-task1-contracts | stopped | Local functional-test task stopped when the user clarified browser-only coding/testing | Partial local pytest additions removed before implementation | Revise the plan so Kaggle browser is authoritative and local storage contains only sanitized snapshots and documentation`
+
+`2026-08-08 | model-code-agent | active | Replaced the local-execution plan with a browser-only implementation plan | Local workspace is storage/version-control only; functional tests and fixes move to Kaggle | Create isolated private V5 notebook with accelerator None and begin contract RED/GREEN cells`

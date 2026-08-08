@@ -127,9 +127,10 @@ The next full encoder run must embed train order, schema, encoder resource,
 processor, sampler, plane map, and cache hashes so later use is cryptographically
 bound to the same data flow.
 
-## Component boundaries
+## Browser notebook component boundaries
 
-The notebook uses module-shaped cells with one responsibility each:
+The private Kaggle notebook is the only implementation and execution source. It
+uses module-shaped cells with one responsibility each:
 
 1. **Contracts:** immutable cache, target, fold, and experiment configurations.
 2. **Supervision:** parser outputs and the pure `build_fold_supervision` policy.
@@ -145,8 +146,9 @@ The notebook uses module-shaped cells with one responsibility each:
 10. **Artifacts:** private aggregate manifests and checkpoints under a fresh run
     nonce; no submission is created by the head laboratory.
 
-When synchronized, reusable logic belongs under `src/rsna_cached/`; the notebook
-remains a thin configuration and reporting layer.
+After a browser-tested saved version passes review, its exact notebook is
+downloaded and sanitized for Git storage. Local files are not used to execute,
+test, or independently modify model behavior.
 
 ## Phase 2: one-factor cached experiment ladder
 
@@ -283,7 +285,7 @@ competition Submit control is not clicked without action-time user approval.
 
 Version 5 is ready for a submission decision only when:
 
-1. mandatory safety regressions pass locally and on Kaggle;
+1. mandatory safety regressions pass in the private Kaggle browser notebook;
 2. Version 3 reproduction passes on the pinned cache;
 3. one candidate passes the confirmed-champion gate, or Version 3 is explicitly
    retained after all bounded candidates fail;
