@@ -6,6 +6,7 @@ __pycache__/
 .venv/
 venv/
 env/
+.worktrees/
 
 # Jupyter
 .ipynb_checkpoints/
@@ -14,9 +15,27 @@ env/
 .kaggle/
 kaggle.json
 
+# Competition data and medical images
+*.dcm
+data/train.csv
+data/train_series.csv
+data/test.csv
+data/test_series.csv
+data/sample_submission.csv
+train_series/
+test_series/
+
 # OS files
 .DS_Store
 Thumbs.db
 
 # Outputs
 outputs/
+submission*.csv
+*.pt
+*.pth
+*.ckpt
+*.zip
+*.tar
+*.tar.gz
+*.7z

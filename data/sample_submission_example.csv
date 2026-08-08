@@ -1,4 +1,4 @@
-row_id,abnormal_acl,abnormal_meniscus_tear,abnormal_meniscal_root_tearing
-R1,0,0,0
-R2,0,0,0
-R3,0,0,0
+StudyInstanceUID,ACL,MCL,Medial Meniscus,Lateral Meniscus,Medial OA,Lateral OA,PF OA,Effusion,Synovitis,Baker's,Contusion,Fracture
+example-study-1,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5
+example-study-2,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5
+example-study-3,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5
