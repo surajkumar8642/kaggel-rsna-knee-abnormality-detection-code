@@ -6,7 +6,7 @@ Last updated: 2026-08-08 Asia/Calcutta
 
 | Session | Status | Work lane | Claimed paths | Browser ownership | Next action |
 |---|---|---|---|---|---|
-| model-code-agent | awaiting design approval | Design Version 5 safety fixes and score experiments | `docs/superpowers/specs/`, `docs/superpowers/plans/`, `CODEX_STATUS.md` | Public reference reviewed read-only; no active Kaggle compute | Obtain approval for the Version 5 design before changing notebook behavior |
+| model-code-agent | active | Write and review the approved Version 5 improvement specification | `docs/superpowers/specs/2026-08-08-version-5-score-improvement-design.md`, `CODEX_STATUS.md` | No active Kaggle compute; accelerator remains None | Commit the specification, complete written-spec review, then create the implementation plan |
 
 ## Current verified evidence
 
@@ -29,3 +29,5 @@ Last updated: 2026-08-08 Asia/Calcutta
 `2026-08-08 | model-code-agent | active | Downloaded and sanitized the Version 4 notebook source; updated repository documentation and coordination files | Local privacy, notebook, and pipeline verification pending | Finish verification, commit/push feature branch, open draft PR; then present ranked Version 5 design for approval`
 
 `2026-08-08 | model-code-agent | handoff | Committed verified baseline at 66c580c, pushed feature/rsna-2-5d-baseline, and opened draft PR #1 | Pipeline, notebook schema, syntax, sanitizer idempotence, privacy scan, and diff checks passed; independent audit found test-order and weak-label-gating blockers | Keep PR draft; fix blockers with regression tests before any competition submission`
+
+`2026-08-08 | model-code-agent | active | User approved the staged Version 5 direction; claimed the Version 5 design spec | Three read-only reviewers are checking safety gates, experiment order, and cache-runner boundaries | Write, self-review, commit, and present the specification before implementation planning`
