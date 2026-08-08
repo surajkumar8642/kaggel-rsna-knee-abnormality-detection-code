@@ -6,7 +6,7 @@ Last updated: 2026-08-08 Asia/Calcutta
 
 | Session | Status | Work lane | Claimed paths | Browser ownership | Next action |
 |---|---|---|---|---|---|
-| model-code-agent | active | Finalize corrected browser-only Version 5 evidence and Git handoff | `README.md`, `notebooks/`, `CODEX_STATUS.md` | Private V5 Version 3 is successful; all sessions stopped; accelerator None | Verify and independently review the source-only mirrors, then commit, push, and update draft PR #1 |
+| model-code-agent | handoff | Completed corrected browser-only Version 5 evidence and Git publication | None | Private V5 Version 3 is successful; all sessions stopped; accelerator None | Keep draft PR #1 for review; do not create a competition submission without explicit action-time confirmation |
 
 ## Current verified evidence
 
@@ -47,3 +47,5 @@ Last updated: 2026-08-08 Asia/Calcutta
 `2026-08-08 | model-code-agent | handoff | Saved successful private Kaggle Version 2 (scriptVersionId 340939456) and exported source-only notebook mirrors | Committed run: 50 seconds CPU, no traceback, no output files, no submission; browser sessions stopped and accelerator None | Review privacy and source parity, then commit/push to draft PR #1`
 
 `2026-08-08 | model-code-agent | active | Corrected the browser implementation to use one paired study cohort per bootstrap replicate and enforce the maximum target-drop gate; reran RED/GREEN contracts and bounded H0/H1 T4 evidence | H1 common screen failed at P=0.7485 with two target drops over 0.10; private V5 Version 3 (scriptVersionId 340945234) completed in 53 seconds with no traceback; all sessions stopped and accelerator None | Verify source parity/privacy, obtain independent review, then commit/push and update draft PR #1`
+
+`2026-08-08 | model-code-agent | handoff | Independent review approved the exact 20-code-cell plus one-Markdown source mirrors; published core snapshot commit 24c47d4 to feature/rsna-2-5d-baseline and refreshed draft PR #1 | Compilation, browser/source parity, zero-output, privacy, and diff checks passed; no candidate passed every promotion gate; no competition submission created | Keep PR draft and require explicit user confirmation before any future Kaggle Submit action`
