@@ -5,7 +5,7 @@ Human-readable Kaggle notebook and supporting utilities for the
 
 ## Verified Kaggle baseline
 
-The source-controlled notebook is
+The source-controlled baseline notebook is
 `notebooks/rsna-knee-2-5d-baseline.ipynb`. It is a sanitized, code-only copy of
 the private Kaggle notebook: outputs, execution counts, transient metadata,
 patient data, predictions, checkpoints, and cached features are not tracked.
@@ -28,6 +28,36 @@ Version 3 is the authoritative completed run. Version 4 is a quick-saved source
 and documentation snapshot and did not consume another full training run. The
 Kaggle draft session is stopped, the accelerator is set to **None**, and the
 competition submission has not been made.
+
+## Version 5 cached-head laboratory
+
+The browser-authored Version 5 notebook is mirrored as both
+`notebooks/rsna-knee-v5-cached-head-lab.ipynb` and the easier-to-review
+`notebooks/rsna-knee-v5-cached-head-lab.py`. Both are source-only exports of
+[private Kaggle Version 3](https://www.kaggle.com/code/surajkumar8642/rsna-knee-v5-cached-head-lab?scriptVersionId=340945234);
+they contain no cell outputs or row-level data.
+
+Version 5 reused the exact verified Version 3 feature cache and pinned folds.
+Its browser-only contract suite covers ordering, fold-local supervision,
+cache provenance, report parsing, cached MIL behavior, deterministic training,
+atomic checkpoint identity, exact-once OOF assembly, and paired study-level
+bootstrap comparison. The committed Kaggle run completed successfully in 53
+seconds on CPU with the experiment execution guard idle.
+
+The bounded T4 experiments produced:
+
+- exact H0 reproduction: OOF macro AUC `0.6280362353`;
+- H1 fold-gated supervision: `0.6447939998` (`+0.0167577645`), which failed the
+  common screen because the paired study bootstrap probability was `0.7485`
+  (required `0.75`) and two targets fell by more than `0.10`;
+- H2 trusted-gold weight 2: `0.6176430711`, which was rejected.
+
+H3 and later factors were not run because the predeclared continuation gates
+failed. Version 3 remains the confirmed candidate; H1 is recorded as a rejected
+high-macro experiment, not a promoted candidate. T4 was used for about ten
+minutes across the bounded experiments and corrected audit rerun, then the
+session was stopped and the accelerator reset to **None**. No competition
+submission was created.
 
 ## Notebook flow
 
